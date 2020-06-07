@@ -467,6 +467,16 @@ protected:
 };
 
 
+class Stable_quantiles
+{
+public:
+  Stable_quantiles() :stable_num_quantiles(0) { }
+protected:
+  longlong get_num_quantiles() { return stable_num_quantiles; }
+  longlong stable_num_quantiles;
+};
+
+
 class Current_row_count
 {
 public:
@@ -647,7 +657,8 @@ class Item_sum_cume_dist: public Item_sum_double,
 
 class Item_sum_ntile : public Item_sum_int,
                        public Partition_row_count,
-                       public Current_row_count
+                       public Current_row_count,
+                       public Stable_quantiles
 {
  public:
   Item_sum_ntile(THD* thd, Item* num_quantiles_expr) :
@@ -669,6 +680,22 @@ class Item_sum_ntile : public Item_sum_int,
       return true;
     }
 
+    if (current_row_count_ == 1)
+    {
+      stable_num_quantiles= get_num_quantiles();
+    }
+
+    if (num_quantiles != stable_num_quantiles)
+    {
+      my_error(ER_INVALID_NTILE_ARGUMENT, MYF(0));
+      /*       
+      my_printf_error(0,
+                      "Argument of NTILE function changed inside one partition"
+                      "Use NTILE with stable argument",
+                       MYF(0), num_quantiles);
+      */
+      return true;
+    }
     null_value= false;
     ulonglong quantile_size = get_row_count() / num_quantiles;
     ulonglong extra_rows = get_row_count() - quantile_size * num_quantiles;
