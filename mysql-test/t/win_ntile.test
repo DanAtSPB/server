@@ -167,5 +167,81 @@ select pk, a, b,
     ntile((select a from t1)) over (partition by b order by pk)
 from t1;
 
+drop table t1;
+
+--echo #
+--echo # MDEV-9911 NTILE must return an error when parameter is not stable 
+--echo #
+
+create table t1 (
+  pk int primary key,
+  c1 nvarchar(10),
+  c2 nvarchar(10),
+  c3 int
+);
+
+insert into t1 values 
+ (1, 'Mark', 'Male', 5),
+ (2, 'John', 'Male', 5),
+ (3, 'Pam', 'Female', 6),
+ (4, 'Sara', 'Female', 6),
+ (5, 'Todd', 'Male', 5),
+ (6, 'Mary', 'Female', 6),
+ (7, 'Ben', 'Male', 5),
+ (8, 'Jodi', 'Female', 6),
+ (9, 'Tom', 'Male', 5),
+ (10, 'Ron', 'Male', 5),
+ (11, 'Mark', 'Male', 5),
+ (12, 'John', 'Male', 5),
+ (13, 'Pam', 'Female', 6),
+ (14, 'Sara', 'Female', 6),
+ (15, 'Todd', 'Male', 5),
+ (16, 'Mary', 'Female', 6),
+ (17, 'Ben', 'Male', 5),
+ (18, 'Jodi', 'Female', 6),
+ (19, 'Tom', 'Male', 5),
+ (20, 'Ron', 'Male', 5);
+
+--echo # correct usage of NTILE (N) only one argument in each partition 
+select c1, c2, c3, ntile(c3) over (partition by c2 order by c3) from t1;
+select c1, c2, c3, ntile(c3) over (partition by c1 order by c2) from t1;
+
+drop table t1;
+
+create table t1 (
+  pk int primary key,
+  c1 nvarchar(10),
+  c2 nvarchar(10),
+  c3 int
+);
+
+insert into t1 values 
+ (1, 'Mark', 'Male', 1),
+ (2, 'John', 'Male', 2),
+ (3, 'Pam', 'Female', 2),
+ (4, 'Sara', 'Female', 2),
+ (5, 'Todd', 'Male', 1),
+ (6, 'Mary', 'Female', 1),
+ (7, 'Ben', 'Male', 1),
+ (8, 'Jodi', 'Female',1),
+ (9, 'Tom', 'Male', 1),
+ (10, 'Ron', 'Male', 1),
+ (11, 'Mark', 'Male', 1),
+ (12, 'John', 'Male', 1),
+ (13, 'Pam', 'Female', 1),
+ (14, 'Sara', 'Female', 1),
+ (15, 'Todd', 'Male', 1),
+ (16, 'Mary', 'Female', 1),
+ (17, 'Ben', 'Male', 1),
+ (18, 'Jodi', 'Female', 1),
+ (19, 'Tom', 'Male', 1),
+ (20, 'Ron', 'Male', 1);
+
+--echo # we save first NTILE argument(N) and compare it to the following N
+--error ER_INVALID_NTILE_ARGUMENT
+select c1, c2, c3, ntile(c3) over (partition by c2 order by c3) from t1;
+
+--error ER_INVALID_NTILE_ARGUMENT
+select c1, c2, c3, ntile(c3) over (partition by c1 order by c2) from t1;
 
 drop table t1;
