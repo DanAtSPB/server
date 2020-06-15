@@ -619,7 +619,7 @@ class Item_sum_ntile : public Item_sum_window_with_row_count
   Item_sum_ntile(THD* thd, Item* num_quantiles_expr) :
     Item_sum_window_with_row_count(thd, num_quantiles_expr),
     current_row_count_(0), 
-    n_first_(0) {};
+    n_old_val_(0) {};
 
   double val_real()
   {
@@ -635,18 +635,12 @@ class Item_sum_ntile : public Item_sum_window_with_row_count
     }
     longlong num_quantiles= get_num_quantiles();
 
-    if (num_quantiles <= 0) 
+    if (num_quantiles <= 0 || (num_quantiles != n_old_val_ && n_old_val_ != 0))
     {
       my_error(ER_INVALID_NTILE_ARGUMENT, MYF(0));
       return true;
     }
-    else if (n_first_ == 0) 
-           n_first_= num_quantiles;
-         else if (num_quantiles != n_first_) 
-         {
-           my_error(ER_INVALID_NTILE_ARGUMENT, MYF(0));
-           return true;
-         }
+    n_old_val_= num_quantiles;
     null_value= false;
 
     ulonglong quantile_size = get_row_count() / num_quantiles;
@@ -673,7 +667,7 @@ class Item_sum_ntile : public Item_sum_window_with_row_count
   {
     current_row_count_= 0;
     set_row_count(0);
-    n_first_= 0;
+    n_old_val_= 0;
   }
 
   const char*func_name() const
@@ -692,7 +686,7 @@ class Item_sum_ntile : public Item_sum_window_with_row_count
  private:
   longlong get_num_quantiles() { return args[0]->val_int(); }
   ulong current_row_count_;
-  longlong n_first_;
+  longlong n_old_val_;
 };
 
 

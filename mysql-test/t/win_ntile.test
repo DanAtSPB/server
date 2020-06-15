@@ -190,7 +190,7 @@ insert into t1 values
  (7, 'Ben', 'Male', 5),
  (8, 'Jodi', 'Female', 6),
  (9, 'Tom', 'Male', 5),
- (10, 'Ron', 'Male', 5),
+ (10, 'Lucky', 'Male', 5),
  (11, 'Mark', 'Male', 5),
  (12, 'John', 'Male', 5),
  (13, 'Pam', 'Female', 6),
@@ -200,19 +200,17 @@ insert into t1 values
  (17, 'Ben', 'Male', 5),
  (18, 'Jodi', 'Female', 6),
  (19, 'Tom', 'Male', 5),
- (20, 'Ron', 'Male', 5);
---echo # Correct usage of NTILE with a fixed argument NTILE(6). 
-select c1, c2, c3, ntile(6) over (partition by c2 order by c3) from t1;
---echo # Correct usage of NTILE(N) - only one argument in each partition. 
-select c1, c2, c3, ntile(c3) over (partition by c2 order by c3) from t1;
+ (20, 'Lucky', 'Female', 6);
+--echo # Correct usage of NTILE with a fix argument NTILE(6). 
+select c1, c2, c3, ntile(6) over (partition by c2 order by c1) from t1;
+--echo # Correct usage - constant NTILE (argument) in each partition. 
+select c1, c2, c3, ntile(c3) over (partition by c2 order by c1) from t1;
 select c1, c2, c3, ntile(c3) over (partition by c1 order by c2) from t1;
 
-update t1 
-  set c3= 1
-  where pk <= 10;
+update t1 set c3= 1 where pk <= 10;
 
---echo # We save first NTILE argument(N) and compare it to the following N.
---echo # If N isn't equal with first N of partition - we stop with an error.
+--echo # We save NTILE argument(N) and compare it to the following N.
+--echo # If N not a constant for the partition - we stop with an error.
 --echo # Currently used an old error:Argument of NTILE must be greater than 0
 --error ER_INVALID_NTILE_ARGUMENT
 select c1, c2, c3, ntile(c3) over (partition by c2 order by c3) from t1;
