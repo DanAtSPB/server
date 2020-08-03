@@ -640,8 +640,7 @@ class Item_sum_ntile : public Item_sum_int,
 {
  public:
   Item_sum_ntile(THD* thd, Item* num_quantiles_expr) :
-    Item_sum_int(thd, num_quantiles_expr), n_old_val_(0)
-  { }
+    Item_sum_int(thd, num_quantiles_expr), n_old_val_(0) {}
 
   longlong val_int()
   {
@@ -653,7 +652,7 @@ class Item_sum_ntile : public Item_sum_int,
 
     longlong num_quantiles= get_num_quantiles();
 
-    if (num_quantiles <= 0 || 
+    if (num_quantiles <= 0 ||
       (static_cast<ulonglong>(num_quantiles) != n_old_val_ && n_old_val_ > 0))
     {
       my_error(ER_INVALID_NTILE_ARGUMENT, MYF(0));
