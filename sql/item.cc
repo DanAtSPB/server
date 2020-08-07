@@ -457,9 +457,9 @@ Item::Item(THD *thd, Item *item):
   name(item->name),
   orig_name(item->orig_name),
   marker(item->marker),
+  null_value(item->null_value),
   maybe_null(item->maybe_null),
   in_rollup(item->in_rollup),
-  null_value(item->null_value),
   with_param(item->with_param),
   with_window_func(item->with_window_func),
   with_field(item->with_field),
@@ -631,9 +631,9 @@ Item_ident::Item_ident(THD *thd, Name_resolution_context *context_arg,
    orig_table_name(table_name_arg),
    orig_field_name(field_name_arg), context(context_arg),
    db_name(db_name_arg), table_name(table_name_arg),
-   field_name(field_name_arg),
-   alias_name_used(FALSE), cached_field_index(NO_CACHED_FIELD_INDEX),
-   cached_table(0), depended_from(0), can_be_depended(TRUE)
+   field_name(field_name_arg), alias_name_used(FALSE),
+   can_be_depended(TRUE), cached_field_index(NO_CACHED_FIELD_INDEX),
+   cached_table(0), depended_from(0)
 {
   name= field_name_arg;
 }
@@ -647,9 +647,9 @@ Item_ident::Item_ident(THD *thd, TABLE_LIST *view_arg,
    /* TODO: suspicious use of first_select_lex */
    context(&view_arg->view->first_select_lex()->context),
    db_name(null_clex_str), table_name(view_arg->alias),
-   field_name(field_name_arg),
-   alias_name_used(FALSE), cached_field_index(NO_CACHED_FIELD_INDEX),
-   cached_table(NULL), depended_from(NULL), can_be_depended(TRUE)
+   field_name(field_name_arg), alias_name_used(FALSE),
+   can_be_depended(TRUE), cached_field_index(NO_CACHED_FIELD_INDEX),
+   cached_table(NULL), depended_from(NULL)
 {
   name= field_name_arg;
 }
@@ -669,10 +669,10 @@ Item_ident::Item_ident(THD *thd, Item_ident *item)
    table_name(item->table_name),
    field_name(item->field_name),
    alias_name_used(item->alias_name_used),
+   can_be_depended(item->can_be_depended),
    cached_field_index(item->cached_field_index),
    cached_table(item->cached_table),
-   depended_from(item->depended_from),
-   can_be_depended(item->can_be_depended)
+   depended_from(item->depended_from)
 {}
 
 void Item_ident::cleanup()

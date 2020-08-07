@@ -748,8 +748,8 @@ public:
     return linkage == UNION_TYPE || linkage == INTERSECT_TYPE || linkage == EXCEPT_TYPE;
   }
   enum sub_select_type get_linkage() { return linkage; }
-  bool distinct;
-  bool no_table_names_allowed; /* used for global order by */
+  bool distinct:1,
+       no_table_names_allowed:1; /* used for global order by */
 
   static void *operator new(size_t size, MEM_ROOT *mem_root) throw ()
   { return (void*) alloc_root(mem_root, (uint) size); }
@@ -879,15 +879,20 @@ public:
   TABLE *table; /* temporary table using for appending UNION results */
   select_result *result;
   st_select_lex *pre_last_parse;
-  bool  prepared, // prepare phase already performed for UNION (unit)
-    optimized, // optimize phase already performed for UNION (unit)
-    optimized_2,
-    executed, // already executed
-    cleaned,
-    bag_set_op_optimized;
-
-  bool optimize_started;
-  bool have_except_all_or_intersect_all;
+  bool  prepared:1, // prepare phase already performed for UNION (unit)
+    optimized:1, // optimize phase already performed for UNION (unit)
+    optimized_2:1,
+    executed:1, // already executed
+    cleaned:1,
+    bag_set_op_optimized:1,
+    is_view:1,
+    optimize_started:1,
+    have_except_all_or_intersect_all:1,
+    columns_are_renamed:1,
+    describe:1, /* union exec() called for EXPLAIN */
+    with_wrapped_tvc:1;/* TRUE if the unit contained TVC at the top level
+                   that has been wrapped into SELECT: VALUES (v1) ... (vn) =>
+                   SELECT * FROM (VALUES (v1) ... (vn)) as tvc              */
 
   // list of fields which points to temporary table for union
   List<Item> item_list;
@@ -899,12 +904,6 @@ public:
     any SELECT of this unit execution
   */
   List<Item> types;
-  /**
-     TRUE if the unit contained TVC at the top level that has been wrapped
-     into SELECT:
-     VALUES (v1) ... (vn) => SELECT * FROM (VALUES (v1) ... (vn)) as tvc
-  */
-  bool with_wrapped_tvc;
   /**
     Pointer to 'last' select, or pointer to select where we stored
     global parameters for union.
@@ -938,7 +937,6 @@ public:
     derived tables/views handling.
   */
   TABLE_LIST *derived;
-  bool is_view;
   /* With clause attached to this unit (if any) */
   With_clause *with_clause;
   /* With element where this unit is used as the specification (if any) */
@@ -958,10 +956,7 @@ public:
   
   /* pointer to the last node before last subsequence of UNION ALL */
   st_select_lex *union_distinct;
-  bool describe; /* union exec() called for EXPLAIN */
   Procedure *last_procedure;     /* Pointer to procedure, if such exists */
-
-  bool columns_are_renamed;
 
   void init_query();
   st_select_lex* outer_select();
@@ -1126,7 +1121,39 @@ public:
 
   List<Item>          item_list;  /* list of fields & expressions */
   List<Item>          pre_fix; /* above list before fix_fields */
-  bool                is_item_list_lookup;
+  bool                is_item_list_lookup:1;
+  /*
+    Needed to correctly generate 'PRIMARY' or 'SIMPLE' for select_type column
+    of EXPLAIN
+  */
+  bool have_merged_subqueries:1,
+       is_set_query_expr_tail:1,
+       with_sum_func:1,   /* sum function indicator */
+       braces:1,    /* SELECT ... UNION (SELECT ... ) <- this braces */
+       automatic_brackets:1, /* dummy select for INTERSECT precedence */
+  /* TRUE when having fix field called in processing of this SELECT */
+       having_fix_field:1,
+  /*
+    TRUE when fix field is called for a new condition pushed into the
+    HAVING clause of this SELECT
+  */
+       having_fix_field_for_pushed_cond:1, 
+       explicit_limit:1,  /* explicit LIMIT clause was used */
+  /*
+    there are subquery in HAVING clause => we can't close tables before
+    query processing end even if we use temporary table
+  */
+       subquery_in_having:1,
+  /* TRUE <=> this SELECT is correlated w.r.t. some ancestor select */
+       with_all_modifier:1,  /* used for selects in union */
+       is_correlated:1,
+       first_natural_join_processing:1,
+       first_cond_optimization:1,
+  /* do not wrap view fields with Item_ref */
+       no_wrap_view_item:1,
+  /* exclude this select from check of unique_table() */
+       exclude_from_table_unique_test:1,
+       in_tvc:1;
   /* 
     Usualy it is pointer to ftfunc_list_alloc, but in union used to create fake
     select_lex for calling mysql_select under results of union
@@ -1169,12 +1196,6 @@ public:
   */
   uint curr_tvc_name;
   
-  /*
-    Needed to correctly generate 'PRIMARY' or 'SIMPLE' for select_type column
-    of EXPLAIN
-  */
-  bool have_merged_subqueries;
-
   List<TABLE_LIST> leaf_tables;
   List<TABLE_LIST> leaf_tables_exec;
   List<TABLE_LIST> leaf_tables_prep;
@@ -1189,7 +1210,6 @@ public:
   SQL_I_List<ORDER> order_list;   /* ORDER clause */
   SQL_I_List<ORDER> gorder_list;
   Item *select_limit, *offset_limit;  /* LIMIT clause parameters */
-  bool is_set_query_expr_tail;
 
   /// Array of pointers to top elements of all_fields list
   Ref_ptr_array ref_pointer_array;
@@ -1218,7 +1238,6 @@ public:
   enum_parsing_place parsing_place; /* where we are parsing expression */
   enum_parsing_place save_parsing_place;
   enum_parsing_place context_analysis_place; /* where we are in prepare */
-  bool with_sum_func;   /* sum function indicator */
 
   ulong table_join_options;
   uint in_sum_expr;
@@ -1233,15 +1252,6 @@ public:
   int nest_level;     /* nesting level of select */
   Item_sum *inner_sum_func_list; /* list of sum func in nested selects */ 
   uint with_wild; /* item list contain '*' */
-  bool braces;    /* SELECT ... UNION (SELECT ... ) <- this braces */
-  bool automatic_brackets; /* dummy select for INTERSECT precedence */
-  /* TRUE when having fix field called in processing of this SELECT */
-  bool having_fix_field;
-  /*
-    TRUE when fix field is called for a new condition pushed into the
-    HAVING clause of this SELECT
-  */
-  bool having_fix_field_for_pushed_cond;
   /* List of references to fields referenced from inner selects */
   List<Item_outer_ref> inner_refs_list;
   /* Number of Item_sum-derived objects in this SELECT */
@@ -1249,21 +1259,11 @@ public:
   /* Number of Item_sum-derived objects in children and descendant SELECTs */
   uint n_child_sum_items;
 
-  /* explicit LIMIT clause was used */
-  bool explicit_limit;
   /*
     This array is used to note  whether we have any candidates for
     expression caching in the corresponding clauses
   */
   bool expr_cache_may_be_used[PARSING_PLACE_SIZE];
-  /*
-    there are subquery in HAVING clause => we can't close tables before
-    query processing end even if we use temporary table
-  */
-  bool subquery_in_having;
-  /* TRUE <=> this SELECT is correlated w.r.t. some ancestor select */
-  bool with_all_modifier;  /* used for selects in union */
-  bool is_correlated;
   /*
     This variable is required to ensure proper work of subqueries and
     stored procedures. Generally, one should use the states of
@@ -1278,12 +1278,6 @@ public:
   */
   uint8 changed_elements; // see TOUCHED_SEL_*
   /* TODO: add foloowing first_* to bitmap above */
-  bool first_natural_join_processing;
-  bool first_cond_optimization;
-  /* do not wrap view fields with Item_ref */
-  bool no_wrap_view_item;
-  /* exclude this select from check of unique_table() */
-  bool exclude_from_table_unique_test;
   /* index in the select list of the expression currently being fixed */
   int cur_pos_in_select_list;
 
@@ -1321,7 +1315,6 @@ public:
   thr_lock_type lock_type;
   
   table_value_constr *tvc;
-  bool in_tvc;
 
   /* The interface employed to execute the select query by a foreign engine */
   select_handler *select_h;
@@ -2786,8 +2779,8 @@ private:
   size_t m_buf_length;
 
   /** Echo the parsed stream to the pre-processed buffer. */
-  bool m_echo;
-  bool m_echo_saved;
+  bool m_echo:1,
+       m_echo_saved:1;
 
   /** Pre-processed buffer. */
   char *m_cpp_buf;
@@ -2837,17 +2830,17 @@ public:
   const char *found_semicolon;
 
   /** SQL_MODE = IGNORE_SPACE. */
-  bool ignore_space;
+  bool ignore_space:1,
 
   /**
     TRUE if we're parsing a prepared statement: in this mode
     we should allow placeholders.
   */
-  bool stmt_prepare_mode;
+       stmt_prepare_mode:1,
   /**
     TRUE if we should allow multi-statements.
   */
-  bool multi_statements;
+       multi_statements:1;
 
   /** Current line number. */
   uint yylineno;
@@ -3304,7 +3297,42 @@ public:
   /* The following is used by KILL */
   killed_state kill_signal;
   killed_type  kill_type;
-  bool is_shutdown_wait_for_slaves;
+  bool is_shutdown_wait_for_slaves:1;
+  bool selects_allow_into:1;
+  bool selects_allow_procedure:1;
+  /*
+    A special command "PARSE_VCOL_EXPR" is defined for the parser
+    to translate a defining expression of a virtual column into an
+    Item object.
+    The following flag is used to prevent other applications to use
+    this command.
+  */
+  bool parse_vcol_expr:1;
+  bool  analyze_stmt:1; /* TRUE<=> this is "ANALYZE $stmt" */
+  bool  explain_json:1;
+  bool local_file:1;
+  bool check_exists:1;
+  bool autocommit:1;
+  bool verbose:1, no_write_to_binlog:1;
+  bool safe_to_cache_query:1;
+  bool ignore:1;
+  bool next_is_main:1; // use "main" SELECT_LEX for nrxt allocation;
+  bool next_is_down:1; // use "main" SELECT_LEX for nrxt allocation;
+  bool sp_lex_in_use:1;   // Keep track on lex usage in SPs for error handling
+  /*
+   field_list was created for view and should be removed before PS/SP rexecuton
+  */
+  bool empty_field_list_on_rset:1;
+  /**
+    During name resolution search only in the table list given by
+    Name_resolution_context::first_name_resolution_table and
+    Name_resolution_context::last_name_resolution_table
+    (see Item_field::fix_fields()).
+  */
+  bool use_only_table_context:1;
+  bool escape_used:1;
+  bool default_used:1;    /* using default() function */
+  bool is_lex_started:1; /* If lex_start() did run. For debugging. */
   /*
     This variable is used in post-parse stage to declare that sum-functions,
     or functions which have sense only if GROUP BY is present, are allowed.
@@ -3325,16 +3353,6 @@ public:
     clause name to get an error.
   */
   const char *clause_that_disallows_subselect;
-  bool selects_allow_into;
-  bool selects_allow_procedure;
-  /*
-    A special command "PARSE_VCOL_EXPR" is defined for the parser 
-    to translate a defining expression of a virtual column into an 
-    Item object.
-    The following flag is used to prevent other applications to use 
-    this command.
-  */
-  bool parse_vcol_expr;
 
   enum enum_duplicates duplicates;
   enum enum_tx_isolation tx_isolation;
@@ -3363,8 +3381,6 @@ public:
   */
   uint table_count;
   uint8 describe;
-  bool  analyze_stmt; /* TRUE<=> this is "ANALYZE $stmt" */
-  bool  explain_json;
   /*
     A flag that indicates what kinds of derived tables are present in the
     query (0 if no derived tables, otherwise a combination of flags
@@ -3372,16 +3388,7 @@ public:
   */
   uint8 derived_tables;
   uint8 context_analysis_only;
-  bool local_file;
-  bool check_exists;
-  bool autocommit;
-  bool verbose, no_write_to_binlog;
-
   enum enum_yes_no_unknown tx_chain, tx_release;
-  bool safe_to_cache_query;
-  bool ignore;
-  bool next_is_main; // use "main" SELECT_LEX for nrxt allocation;
-  bool next_is_down; // use "main" SELECT_LEX for nrxt allocation;
   st_parsing_options parsing_options;
   uint8 lex_options; // see OPTION_LEX_*
   /*
@@ -3401,19 +3408,12 @@ public:
   Lex_prepared_stmt prepared_stmt;
   sp_head *sphead;
   sp_name *spname;
-  bool sp_lex_in_use;   // Keep track on lex usage in SPs for error handling
-
   sp_pcontext *spcont;
 
   st_sp_chistics sp_chistics;
 
   Event_parse_data *event_parse_data;
 
-  /*
-    field_list was created for view and should be removed before PS/SP
-    rexecuton
-  */
-  bool empty_field_list_on_rset;
   /* Characterstics of trigger being created */
   st_trg_chistics trg_chistics;
   /*
@@ -3463,23 +3463,11 @@ public:
   */
   engine_option_value *option_list_last;
 
-  /**
-    During name resolution search only in the table list given by 
-    Name_resolution_context::first_name_resolution_table and
-    Name_resolution_context::last_name_resolution_table
-    (see Item_field::fix_fields()). 
-  */
-  bool use_only_table_context;
-
   /*
     Reference to a struct that contains information in various commands
     to add/create/drop/change table spaces.
   */
   st_alter_tablespace *alter_tablespace_info;
-  
-  bool escape_used;
-  bool default_used;    /* using default() function */
-  bool is_lex_started; /* If lex_start() did run. For debugging. */
 
   /*
     The set of those tables whose fields are referenced in all subqueries
