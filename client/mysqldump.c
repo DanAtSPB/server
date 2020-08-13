@@ -117,7 +117,7 @@ static my_bool  verbose= 0, opt_no_create_info= 0, opt_no_data= 0, opt_no_data_m
                 opt_include_master_host_port= 0,
                 opt_events= 0, opt_comments_used= 0,
                 opt_alltspcs=0, opt_notspcs= 0, opt_logging,
-                opt_drop_trigger= 0 ;
+                opt_drop_trigger= 0, opt_specific_tables= 0;
 static my_bool insert_pat_inited= 0, debug_info_flag= 0, debug_check_flag= 0,
                select_field_names_inited= 0;
 static ulong opt_max_allowed_packet, opt_net_buffer_length;
@@ -531,6 +531,10 @@ static struct my_option my_long_options[] =
   {"socket", 'S', "The socket file to use for connection.",
    &opt_mysql_unix_port, &opt_mysql_unix_port, 0, 
    GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+  {"specific-tables", 'o',
+   "Dump specific-tables from different databases - only those that listed "
+   "dbname1.table1 dbname2.table3",
+   &opt_specific_tables, &opt_specific_tables, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
 #include <sslopt-longopts.h>
   {"tab",'T',
    "Create tab-separated textfile for each table to given path. (Create .sql "
@@ -650,6 +654,8 @@ static void short_usage_sub(FILE *f)
   fprintf(f, "OR     %s [OPTIONS] --databases [OPTIONS] DB1 [DB2 DB3...]\n",
           my_progname_short);
   fprintf(f, "OR     %s [OPTIONS] --all-databases [OPTIONS]\n", my_progname_short);
+  fprintf(f, "OR     %s [OPTIONS] --specific-tables [OPTIONS] db.table [db.table ...]\n",
+          my_progname_short);
 }
 
 
@@ -914,6 +920,9 @@ get_one_option(const struct my_option *opt,
   case (int) OPT_TABLES:
     opt_databases=0;
     break;
+  case 'o':
+    opt_databases= 0;
+    break;
   case (int) OPT_IGNORE_DATABASE:
     if (my_hash_insert(&ignore_database,
                    (uchar*) my_strdup(PSI_NOT_INSTRUMENTED, argument, MYF(0))))
@@ -1123,6 +1132,38 @@ static int get_options(int *argc, char ***argv)
 
 
 /*
+  Sort an array in ascending order using the gnome algorithm.
+*/
+static my_bool order_asc(char **arr, int size)
+{
+  int i= 1;
+  int j= 2;
+  char *temp;
+  while ( i < size ) 
+  {
+    if ( strcmp(arr[i-1], arr[i]) <= 0 ) 
+    { 
+      i= j;
+      j++;
+    }
+    else 
+    {
+      temp= arr[i]; 
+      arr[i]= arr[i-1]; 
+      arr[i-1]= temp;
+      i--;
+      if (i == 0)
+      {
+        i= j;
+        j++;
+      }
+    }
+  }
+  return 0;
+}
+
+
+/*
 ** DB_error -- prints mysql error message and exits the program.
 */
 static void DB_error(MYSQL *mysql_arg, const char *when)
@@ -1132,7 +1173,6 @@ static void DB_error(MYSQL *mysql_arg, const char *when)
           mysql_errno(mysql_arg), mysql_error(mysql_arg), when);
   DBUG_VOID_RETURN;
 }
-
 
 
 /*
@@ -4695,7 +4735,7 @@ static int init_dumping(char *database, int init_func(char*))
   }
   if (!path && !opt_xml)
   {
-    if (opt_databases || opt_alldbs)
+    if (opt_databases || opt_alldbs || opt_specific_tables)
     {
       /*
         length of table name * 2 (if name contains quotes), 2 quotes and 0
@@ -6282,33 +6322,58 @@ int main(int argc, char **argv)
   }
   else
   {
-    // Check all arguments meet length condition. Currently database and table
-    // names are limited to NAME_LEN bytes and stack-based buffers assumes
+    // We have either --databases <list>  or --specific-tables <list>
+    // Check all arguments meet length condition. Before database and table
+    // names were limited to NAME_LEN bytes and stack-based buffers assumes
     // that escaped name will be not longer than NAME_LEN*2 + 2 bytes long.
+    // Currently for arguments like database.table made some adjustments.
     int argument;
     for (argument= 0; argument < argc; argument++)
     {
       size_t argument_length= strlen(argv[argument]);
-      if (argument_length > NAME_LEN)
+      if (argument_length > NAME_LEN ||
+          (opt_specific_tables && argument_length > NAME_LEN * 2 + 1))
       {
         die(EX_CONSCHECK, "[ERROR] Argument '%s' is too long, it cannot be "
           "name for any table or database.\n", argv[argument]);
       }
+      if (opt_specific_tables && !strchr(argv[argument], '.'))
+      {
+        die(EX_CONSCHECK, "[ERROR] Argument '%s' does not specify the database "
+            "and table name. Use <database>.<table> format.\n", argv[argument]);
+      }
     }
 
-    if (argc > 1 && !opt_databases)
+    if (opt_specific_tables)
     {
-      /* Only one database and selected table(s) */
-      if (!opt_alltspcs && !opt_notspcs)
-        dump_tablespaces_for_tables(*argv, (argv + 1), (argc - 1));
-      dump_selected_tables(*argv, (argv + 1), (argc - 1));
+      if (argc > 2) order_asc(argv,argc);// order database names if more than 2 arguments
+      for (int i= 0; i < argc; i++)
+      {
+        char *dbname, *table;
+        dbname= strtok(argv[i],".");
+        table= strtok(NULL,".");
+
+        if (!opt_alltspcs && !opt_notspcs)
+          dump_tablespaces_for_tables(dbname, &table, 1);
+        dump_selected_tables(dbname, &table, 1);
+      }
     }
     else
     {
-      /* One or more databases, all tables */
-      if (!opt_alltspcs && !opt_notspcs)
-        dump_tablespaces_for_databases(argv);
-      dump_databases(argv);
+      if (argc > 1 && !opt_databases)
+      {
+        /* Only one database and selected table(s) */
+        if (!opt_alltspcs && !opt_notspcs)
+          dump_tablespaces_for_tables(*argv, (argv + 1), (argc - 1));
+        dump_selected_tables(*argv, (argv + 1), (argc - 1));
+      }
+      else
+      {
+        /* One or more databases, all tables */
+        if (!opt_alltspcs && !opt_notspcs)
+          dump_tablespaces_for_databases(argv);
+        dump_databases(argv);
+      }
     }
   }
 

@@ -5423,6 +5423,7 @@ DROP DATABASE bug25717383;
 Usage: mysqldump [OPTIONS] database [tables]
 OR     mysqldump [OPTIONS] --databases [OPTIONS] DB1 [DB2 DB3...]
 OR     mysqldump [OPTIONS] --all-databases [OPTIONS]
+OR     mysqldump [OPTIONS] --specific-tables [OPTIONS] db.table [db.table ...]
 For more options, use mysqldump --help
 #
 # MDEV-9001 - [PATCH] Fix DB name quoting in mysqldump --routine
@@ -5906,3 +5907,20 @@ a  b c & $!@#$%^&*( )	int(11)	YES		4	INVISIBLE
 ds=~!@ \# $% ^ & * ( ) _ - = +	int(11)	YES		5	INVISIBLE
 drop database d;
 # End of 10.3 tests
+#
+# MDEV-17987
+#
+CREATE DATABASE db1;
+CREATE DATABASE db2;
+USE db2;
+CREATE TABLE t1 (i1 serial);
+INSERT INTO t1 VALUES (1),(2);
+CREATE TABLE t2 (i2 int);
+INSERT INTO t2 VALUES (3),(4);
+use db1;
+CREATE TABLE b1 (id smallint);
+INSERT INTO b1 VALUES (5),(6);
+CREATE TABLE t1 (i3 smallint);
+INSERT INTO t1 VALUES (7),(8);
+DROP DATABASE db1;
+DROP DATABASE db2;

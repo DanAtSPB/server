@@ -2794,3 +2794,25 @@ desc t3;
 drop database d;
 
 --echo # End of 10.3 tests
+
+--echo #
+--echo # MDEV-17987
+--echo #
+
+CREATE DATABASE db1;
+CREATE DATABASE db2;
+USE db2;
+CREATE TABLE t1 (i1 serial);
+INSERT INTO t1 VALUES (1),(2);
+CREATE TABLE t2 (i2 int);
+INSERT INTO t2 VALUES (3),(4);
+use db1;
+CREATE TABLE b1 (id smallint);
+INSERT INTO b1 VALUES (5),(6);
+CREATE TABLE t1 (i3 smallint);
+INSERT INTO t1 VALUES (7),(8);
+
+--exec $MYSQL_DUMP --default-character-set=utf8mb4 --specific-tables -o db1.t1 db2.t2 db1.b1 > temp1.sql
+
+DROP DATABASE db1;
+DROP DATABASE db2;
