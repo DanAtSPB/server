@@ -188,13 +188,10 @@ sub set_root_password {
   }
 
   my $esc_pass = basic_single_escape($password1);
-  do_query("UPDATE mysql.user SET Password=PASSWORD('$esc_pass') WHERE User='root';")
+  do_query("ALTER User 'root'@'localhost' IDENTIFIED BY '$esc_pass';")
     or die "Password update failed!\n";
 
   print "Password updated successfully!\n";
-  print "Reloading privilege tables..\n";
-  reload_privilege_tables()
-    or die "Can not continue.\n";
 
   print "\n";
   $rootpass = $password1;
@@ -202,13 +199,13 @@ sub set_root_password {
 }
 
 sub remove_anonymous_users {
-  do_query("DELETE FROM mysql.user WHERE User='';")
+  do_query("DROP USER IF EXISTS '';")
     or die print " ... Failed!\n";
   print " ... Success!\n";
 }
 
 sub remove_remote_root {
-  if (do_query("DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');")) {
+  if (do_query("DROP USER IF EXISTS 'root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');")) {
     print " ... Success!\n";
   } else {
     print " ... Failed!\n";
@@ -228,16 +225,6 @@ sub remove_test_database {
     print " ... Success!\n";
   } else {
     print " ... Failed!  Not critical, keep moving...\n";
-  }
-}
-
-sub reload_privilege_tables {
-  if (do_query("FLUSH PRIVILEGES;")) {
-    print " ... Success!\n";
-    return 1;
-  } else {
-    print " ... Failed!\n";
-    return undef;
   }
 }
 
@@ -357,29 +344,7 @@ if ( $reply =~ /n/i ) {
 }
 print "\n";
 
-
-#
-# Reload privilege tables
-#
-
 print <<HERE;
-Reloading the privilege tables will ensure that all changes made so far
-will take effect immediately.
-
-HERE
-
-print "Reload privilege tables now? [Y/n] ";
-$reply = <STDIN>;
-if ( $reply =~ /n/i ) {
-  print " ... skipping.\n";
-} else {
-  reload_privilege_tables();
-}
-print "\n";
-
-print <<HERE;
-
-
 
 All done!  If you've completed all of the above steps, your MySQL
 installation should now be secure.

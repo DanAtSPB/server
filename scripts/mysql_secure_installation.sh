@@ -304,11 +304,9 @@ set_root_password() {
     fi
 
     esc_pass=`basic_single_escape "$password1"`
-    do_query "UPDATE mysql.user SET Password=PASSWORD('$esc_pass') WHERE User='root';"
+    do_query "ALTER User 'root'@'localhost' IDENTIFIED BY '$esc_pass';"
     if [ $? -eq 0 ]; then
 	echo "Password updated successfully!"
-	echo "Reloading privilege tables.."
-	reload_privilege_tables
 	if [ $? -eq 1 ]; then
 		clean_and_exit
 	fi
@@ -324,7 +322,7 @@ set_root_password() {
 }
 
 remove_anonymous_users() {
-    do_query "DELETE FROM mysql.user WHERE User='';"
+    do_query "DROP USER IF EXISTS '';"
     if [ $? -eq 0 ]; then
 	echo " ... Success!"
     else
@@ -336,7 +334,7 @@ remove_anonymous_users() {
 }
 
 remove_remote_root() {
-    do_query "DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');"
+    do_query "DROP USER IF EXISTS 'root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');"
     if [ $? -eq 0 ]; then
 	echo " ... Success!"
     else
@@ -362,17 +360,6 @@ remove_test_database() {
     fi
 
     return 0
-}
-
-reload_privilege_tables() {
-    do_query "FLUSH PRIVILEGES;"
-    if [ $? -eq 0 ]; then
-	echo " ... Success!"
-	return 0
-    else
-	echo " ... Failed!"
-	return 1
-    fi
 }
 
 interrupt() {
@@ -511,27 +498,6 @@ else
 fi
 echo
 
-
-#
-# Reload privilege tables
-#
-
-echo "Reloading the privilege tables will ensure that all changes made so far"
-echo "will take effect immediately."
-echo
-
-while true ; do
-    echo $echo_n "Reload privilege tables now? [Y/n] $echo_c"
-    read reply
-    validate_reply $reply && break
-done
-
-if [ "$reply" = "n" ]; then
-    echo " ... skipping."
-else
-    reload_privilege_tables
-fi
-echo
 
 cleanup
 
