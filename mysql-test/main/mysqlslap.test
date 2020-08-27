@@ -88,3 +88,14 @@ DROP TABLE t1;
 --exec $MYSQL_SLAP --concurrency=1 --silent --iterations=1 --number-int-cols=2 --number-char-cols=3 --auto-generate-sql --auto-generate-sql-guid-primary --create-schema=slap
 
 --exec $MYSQL_SLAP --concurrency=1 --silent --iterations=1 --number-int-cols=2 --number-char-cols=3 --auto-generate-sql --auto-generate-sql-secondary-indexes=1 --create-schema=slap
+
+
+--echo # --exec $MYSQL_SLAP --create-schema=test --query="SELECT current_user()" --concurrency=1 --iterations=1 -# -T
+
+--exec $MYSQL_SLAP --create-schema=test --delimiter=";" --create="CREATE TABLE t (a int);INSERT INTO t VALUES (5)" --query="SELECT * FROM t"  --concurrency=40  --iterations=100 
+
+--echo #
+--echo # mdev-22485: does not use current user as default for connecting to server
+--echo #
+--replace_result $USER  USER_IS_CORRECT
+select current_user();

@@ -258,3 +258,17 @@ DROP TABLE t1;
 #
 # Bug MDEV-15789 (Upstream: #80329): MYSQLSLAP OPTIONS --AUTO-GENERATE-SQL-GUID-PRIMARY and --AUTO-GENERATE-SQL-SECONDARY-INDEXES DONT WORK
 #
+# --exec /home/dan/builds/10.1/mdev-22485/client/mysqlslap --defaults-file=/home/dan/builds/10.1/mdev-22485/mysql-test/var/my.cnf --create-schema=test --query="SELECT current_user()" --concurrency=1 --iterations=1 -# -T
+Benchmark
+	Average number of seconds to run all queries: 0.011 seconds
+	Minimum number of seconds to run all queries: 0.011 seconds
+	Maximum number of seconds to run all queries: 0.014 seconds
+	Number of clients running queries: 40
+	Average number of queries per client: 1
+
+#
+# mdev-22485: does not use current user as default for connecting to server
+#
+select current_user();
+current_user()
+root@localhost
